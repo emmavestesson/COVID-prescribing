@@ -1,0 +1,717 @@
+---
+title: Changes in hospital prescribing activity at a specialist children’s hospital
+  during the COVID-19 pandemic - an observational study
+author:
+- Emma Vestesson ^[UCL Great Ormond Street Institute of Child Health, The Health Foundation,
+  London, UK] (orcid=0000-0002-7284-9172)
+- Carlos Alonso ^[Great Ormond Street Hospital, London, UK]
+- John Booth ^[Great Ormond Street Hospital, London, UK] (orcid=0000-0003-4357-1324)
+- Neil J Sebire ^[UCL Great Ormond Street Institute of Child Health and NIHR GOSH
+  BRC, London, UK] (orcid=0000-0001-5348-9063)
+- Adam Steventon ^[The Health Foundation, London, UK] (orcid=0000-0001-8247-7520)
+- Steve Tomlin ^[Great Ormond Street Hospital, London, UK]
+- Joseph F Standing ^[UCL Great Ormond Street Institute of Child Health] (orcid=0000-0002-4561-7173)
+output:
+  word_document:
+    reference_docx: wordstyle.docx
+  pdf_document: default
+header-includes:
+- \usepackage{lineno}
+- \linenumbers
+linestretch: 2
+bibliography: /home/emma/Documents/bib_ref/PhD.bib
+csl: /home/emma/Documents/bib_ref/styles/elsevier-vancouver.csl
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(include =  FALSE)
+knitr::opts_chunk$set(warning =  FALSE)
+knitr::opts_chunk$set(message =  FALSE)
+library(scales)
+library(tidyverse)
+library(lubridate)
+library(gt)
+library(gtsummary)
+library(flextable)
+library(patchwork)
+library(viridis)
+library(labelled)
+library(patientcounter)
+
+
+covid_start <- '2020-03-23'
+GOSH_purple <- '#4c3c90'
+```
+
+```{r load data, cache=FALSE}
+
+adms_long <- readRDS(here::here('data','admissions_long.rds'))%>% 
+  filter(date>='2019-04-23')
+
+hospital_occupancy_daily_tfc <- readRDS( 'hospital_occupancy_daily_tfc.rds')
+adms_theatre <- readRDS( here::here('data', 'adms_theatre.rds'))
+
+
+one_row_per_admission <- readRDS(here::here('data', '1_clean_data_one_row_per_adms.rds')) %>% 
+      filter(patient_class %in% c('Inpatient', 'Day Case')) %>% 
+  filter(start_datetime_adms>='2019-04-23' & start_datetime_adms <='2020-09-06')
+
+
+
+one_row_per_admission <- one_row_per_admission %>% 
+  mutate(source= 'epic')
+
+one_row_per_discharge <- one_row_per_admission %>% 
+  mutate(year= year(end_datetime_adms), 
+         week = isoweek(end_datetime_adms)) %>% 
+  filter(end_datetime_adms <='2020-09-06')
+
+
+one_row_per_admission <- one_row_per_admission %>% 
+  mutate(year= year(start_datetime_adms), 
+         week = isoweek(start_datetime_adms)) 
+
+meds_adms <- readRDS( here::here('data', '2_clean_data_one_row_per_day.rds'))  %>% 
+      filter(patient_class %in% c('Inpatient', 'Day Case')) %>% 
+  filter(start_datetime_adms>='2019-04-23' & start_datetime_adms <='2020-09-06')
+
+meds_adms <- meds_adms %>% 
+  mutate(source= 'epic')
+
+
+admissions_meds_given  <- readRDS(here::here('data', '3_admissions_meds_given.rds'))
+
+inpatient <- one_row_per_admission %>% 
+  filter(patient_class=='Inpatient') 
+admissions_n <- nrow(one_row_per_admission) %>% 
+  comma()
+
+admissions_individuals_n  <- one_row_per_admission %>% 
+  distinct(project_id) %>%
+  nrow() %>% 
+  comma()
+admissions_inpatient_n <- inpatient %>% 
+  nrow() %>% 
+  comma()
+
+admissions_day_cases_n <- one_row_per_admission %>% 
+  filter(patient_class=='Day Case') %>% 
+  nrow() %>% 
+  comma()
+
+unique_patients_inpatient_n <- inpatient %>% 
+  distinct(project_id) %>% 
+  nrow() %>% 
+  comma()
+
+unique_patients_day_cases_n <- one_row_per_admission %>% 
+  filter(patient_class=='Day Case') %>% 
+      distinct(project_id) %>% 
+  nrow() %>% 
+  comma()
+
+
+
+study_end <- max(one_row_per_admission$start_datetime_adms) %>% date() 
+
+weeks_pre <- one_row_per_admission %>% 
+  filter(covid==FALSE) %>% 
+  mutate(week=floor_date(date(start_datetime_adms), week_start = 1, unit='week')) %>% 
+  distinct(week) %>% 
+  nrow()
+
+weeks_post <-  one_row_per_admission %>% 
+  filter(covid==TRUE) %>% 
+  mutate(week=floor_date(date(start_datetime_adms), week_start = 1, unit='week')) %>% 
+  distinct(week) %>% 
+  nrow()
+
+```
+
+\newpage
+## Abstract
+
+### Objective
+To compare hospital activity, patient casemix and medication prescribing and administration before and during the COVID-19 emergency.
+
+### Design
+Retrospective observational study
+
+### Setting
+A specialist children's hospital in the UK
+
+### Patients
+Inpatients aged 25 and younger treated at a specialist children's hospital between 29 April 2019 and 6 September 2020
+
+### Results
+There were 21,471 day cases and inpatients treated during the 16 month study period. Day cases (no overnight stay) dropped by around 37% per week. Both admissions and discharges for inpatients (at least one overnight stay) decreased leading to a small reduction in hospital bed days but no reduction in hospital bed nights. The effect on hospital activity on different patient groups varied substantially with some groups such as medical oncology day cases increasing by 13%. As a result, the patient case mix in the hospital was very different during the pandemic. Overall weekly medication administrations decreased for day cases and inpatients, but  weekly medication administrations per bed day increased by 10% for day cases and 6% for inpatients. 
+
+### Conclusions 
+Despite not being badly affected by the disease itself, specialist paediatric hospital services have been greatly affected by the pandemic. The average number of medications per inpatient bed day increased, likely reflecting changes to the patient population, with only those children with severe conditions being treated during the pandemic. These data demonstrate the complex pattern of implications on specialist services and provide evidence for planning the impact of future emergencies and resolution strategies.
+
+\newpage
+## Introduction
+
+The COVID-19 emergency has had wide ranging effects on access to health care in the UK. Despite <1% of COVID-19 cases appearing in children in the first wave and COVID-19 in children being associated with a milder disease progression, most children were still affected by wide-ranging changes to society [@Ladhani2020,@Gotzinger2020, @Sinha2020]. A nationwide lockdown where everyone but key workers was recommended to stay at home was implemented on 23 March 2020 and schools had been closed a few days earlier, on 20 March 2020. NHS hospitals in England were instructed to suspend all non-urgent elective surgery by 15 April 2020.
+
+
+As of April 2020, the majority of complex paediatric inpatients in North Central London CCG were being cared for at Great Ormond Street Hospital (GOSH), a paediatric tertiary care hospital based in central London [@NCLApril2020]. This was part of a systems response by north and central London health and care providers to the COVID-19 pandemic aiming to optimize capacity for adults with COVID-19 in other hospitals. Patients at GOSH generally have complex underlying medical conditions with around three quarters of inpatients registered with the hospital being considered as 'vulnerable' to COVID-19 according to COVID-19 guidance [@Issitt2020]. There were also changes to working patterns at GOSH with some staff working remotely, more staff being off sick or being transferred to other hospitals.
+
+A large district general hospital in Manchester, UK, reported a 30% decrease in visits to the paediatric emergency department compared to pre-pandemic [@Isba2020a], and a survey of paediatricians in the UK and Ireland reported that over 30% saw patients in emergency departments or paediatric assessment units presenting later than they would have expected prior to the COVID-19 emergency[@Lynn2020]. However, a multi-centre study from the UK examining presentations to paediatric emergency departments at seven hospitals found that the majority (\>90%) of presentations that did occur were not delayed[@Roland2020].
+
+Similar patterns have been reported internationally, such as a 47.2% decrease in presentations to emergency departments in Victoria, Australia [@Cheek2020] and 70-90% reduction in attendances to five paediatric emergency departments in Italy compared to previous data [@Lazzerini2020] .
+
+Though there are studies emerging that look at access and utilisation of emergency health care for children during the COVID-19 emergency, there is a paucity on the impact of changes to care in hospital for paediatric inpatients. Health care utilisation in these different health care settings will be driven by various factors, especially at GOSH where there is no A&E department. Understanding how inpatient care at a specialist paediatric hospital changed during the pandemic will be important in interpreting the possible drivers for changes in healthcare utilisation such as prescribing patterns during that period. 
+
+Using routinely collected, non-identifiable data derived from the electronic health record at GOSH, we conducted a retrospective study to quantify how the COVID-19 emergency affected a specialist children's hospital. The aim was to compare hospital activity, types of activity, patient case mix and in particular medication prescribing and administration before and during the COVID-19 emergency.  
+
+## Methods
+
+```{r}
+
+no_medications <- one_row_per_admission %>% 
+  filter(total_drugs_admin==0) %>% 
+  nrow() %>% 
+  comma()
+
+
+
+medications <- one_row_per_admission %>% 
+  summarise(total_drugs_admin=sum(total_drugs_admin)) %>% 
+  pull(total_drugs_admin) %>% 
+  comma()
+
+
+
+theatre_visits_booked <- one_row_per_admission %>% 
+  summarise(theatre_performed_per_adms=sum(theatre_performed_per_adms)) %>% 
+  pull(theatre_performed_per_adms) %>% 
+  comma()
+
+  
+```
+
+## Data sources and study populations
+
+We retrospectively used routinely collected deidentified hospital data (REC approval 17/LO/0008) from children who were inpatients at GOSH between Monday 29 April 2019 and Sunday 6 September 2020. A new electronic health record system went live at GOSH in mid-April 2019, making Monday 29 April 2019 the first full week with data from the new system. The end of the study period coincides with schools in the UK re-opening. Admissions data with information on admission and discharge dates was linked to data on treatment speciality, surgical encounters and medication prescribing data using three variables: a pseudonomised patient ID and the date and time of admission and discharge. Patients older than 25 years of age when admitted were excluded from the study (<1% of admissions) but no other exclusion criteria were applied to the data.
+
+### Outcome measures
+
+Descriptive statistics of patient characteristics recorded at admission, type and source of admission, number of surgical encounters and medication administrations were calculated before and after the start of the COVID-19 emergency based on admission dates.
+
+Patients were included in the COVID-19 pandemic period based on admission dates and some patients will have been admitted before 23 March 2020 but discharged after. These patients were included in the pre-COVID-19 pandemic group.
+
+All data relating to drug administrations were retrieved. The total number of drugs administered was calculated at hospital level. Drug administration per patient bed day was calculated for the most common therapeutic classes.
+
+Patient bed days by specialised service were calculated for specialities with at least 1000 admissions in the study period. The treatment function code was used to identify within which specialised service the patients was admitted to [@TFCCODE].
+
+Length of stay was calculated as the difference in days between admission and discharge. Patients that were not discharged during the study period were censored on the `r format(study_end, '%d %B %Y')` and this date was used to calculate length of stay.
+
+Censored patients were not included in the count of day cases or discharges but were included in admission counts, bed days and bed nights.
+
+### Hospital level measures
+
+Weekly counts of admissions, discharges, hospital bed nights, surgical encounters, and medication administrations were used to calculate summary statistics comparing hospital level activity before and during the COVID-19 emergency. All weekly measures were calculated from Monday to Sunday with Monday 23 March 2020 marking the start of the COVID-19 emergency.
+
+Seven day rolling averages were calculated for day cases, inpatient admissions and inpatient discharges.
+
+There were `r weeks_pre` weeks included in the pre-COVID-19 period and `r weeks_post` in the COVID-19 period.
+
+## Statistical methods
+
+All measures were reported separately for day cases, (defined as patients who were admitted but did not stay overnight), and inpatients (defined as patients admitted and with at least on overnight stay).
+
+
+Wilcoxon rank-sum tests and chi-square test of independence were used to test for statistically significant differences between the two groups, before and during the COVID-19 emergency, at the 95% confidence level.
+
+All analyses were performed using R 4.0.2 [@rproject].
+
+### Results
+
+```{r numbers-for-text}
+inpatient <- one_row_per_admission %>% 
+  filter(patient_class=='Inpatient') 
+
+inpatient_admissions_n <- nrow(inpatient) %>% 
+  comma()
+
+inpatient_admissions_individuals_n  <- inpatient %>% 
+  distinct(project_id) %>%
+  nrow() %>% 
+  comma()
+
+admissions_day_cases_n <- one_row_per_admission %>% 
+  filter(patient_class=='Day Case') %>% 
+  nrow() %>% 
+  comma()
+
+unique_patients_inpatient_n <- inpatient %>% 
+  distinct(project_id) %>% 
+  nrow() %>% 
+  comma()
+
+unique_patients_day_cases_n <- one_row_per_admission %>% 
+  filter(patient_class=='Day Case') %>% 
+      distinct(project_id) %>% 
+  nrow() %>% 
+  comma()
+
+day_case_medication_admin <-  one_row_per_admission %>% 
+  filter(patient_class=='Day Case') %>% 
+  summarise(total_drugs_admin=sum(total_drugs_admin)) %>% 
+  pull(total_drugs_admin) %>% 
+  comma()
+
+day_case_theatre_visits_booked <- one_row_per_admission %>% 
+    filter(patient_class=='Day Case') %>% 
+  summarise(theatre_performed_per_adms=sum(theatre_performed_per_adms)) %>% 
+  pull(theatre_performed_per_adms) %>% 
+  comma()
+
+inpatient_medication_admin <-  one_row_per_admission %>% 
+  filter(patient_class=='Inpatient') %>% 
+  summarise(total_drugs_admin=sum(total_drugs_admin)) %>% 
+  pull(total_drugs_admin) %>% 
+  comma()
+
+inpatient_theatre_visits_booked <- one_row_per_admission %>% 
+    filter(patient_class=='Inpatient') %>% 
+  summarise(theatre_performed_per_adms=sum(theatre_performed_per_adms)) %>% 
+  pull(theatre_performed_per_adms) %>% 
+  comma
+
+```
+
+The study included a total of `r admissions_individuals_n` patients with `r admissions_n` admissions, `r  medications` medication administrations and `r theatre_visits_booked` surgical encounters. For day cases, there were `r unique_patients_day_cases_n` individuals, `r admissions_day_cases_n` admissions, `r day_case_medication_admin` medication administrations and `r day_case_theatre_visits_booked` surgical encounters. For inpatients, there were `r unique_patients_inpatient_n` individuals, `r admissions_inpatient_n` admissions, `r inpatient_medication_admin` medication administrations and `r inpatient_theatre_visits_booked` surgical encounters.
+
+
+
+```{r table-hospital-level, echo=FALSE, include=TRUE}
+
+hospital_weekly_inpatient <- one_row_per_admission %>%
+  filter(patient_class=='Inpatient') %>% 
+    mutate( first_date_of_week=floor_date(start_datetime_adms, unit='week', week_start = 1)) %>% 
+  add_count(first_date_of_week, patient_class, name='weekly_admissions')  %>% 
+  group_by(first_date_of_week) %>% 
+  mutate(weekly_theatre=sum(theatre_performed_per_adms)) %>% 
+  mutate(covid=first_date_of_week>=covid_start, 
+         covid=factor(covid, levels = c(FALSE, TRUE), labels=c('Pre-COVID-19 ', 'COVID-19 '))) %>%
+  select(covid,  first_date_of_week, contains('weekly'))  %>% 
+  distinct(first_date_of_week, .keep_all=TRUE) %>% 
+  select(-first_date_of_week)
+
+inpatient_weekly_discharges <- one_row_per_discharge %>% 
+  filter(patient_class=='Inpatient') %>% 
+  filter(!(source=='legacy' & end_datetime_adms>='2019-01-01')) %>% 
+    mutate( first_date_of_week_discharge=floor_date(end_datetime_adms, unit='week', week_start = 1)) %>% 
+  count(first_date_of_week_discharge, name='weekly_discharges') %>% 
+      set_variable_labels(weekly_discharges = "Weekly discharges")
+
+bed_nights <- meds_adms %>% 
+  distinct(adms_id, start_datetime_adms, end_datetime_adms, date) %>% 
+  mutate(end_date=date(end_datetime_adms)) %>% 
+  filter(date!=end_date) %>% 
+  mutate( first_date_of_week=floor_date(date, unit='week', week_start = 1)) %>%  
+  count(first_date_of_week, name='weekly_bed_nights') 
+
+bed_days <- meds_adms %>% 
+  distinct(adms_id, start_datetime_adms, end_datetime_adms, date) %>% 
+  mutate(end_date=date(end_datetime_adms)) %>% 
+  mutate( first_date_of_week=floor_date(date, unit='week', week_start = 1)) %>%  
+  count(first_date_of_week, name='weekly_bed_days') 
+
+
+inpatient_medication_given <- admissions_meds_given %>%
+  filter(!is.na(start_datetime_meds_given)) %>%
+  filter(patient_class == 'Inpatient') %>%
+  mutate( first_date_of_week=floor_date(start_datetime_meds_given, unit='week', week_start = 1)) %>%
+  count(first_date_of_week, name='weekly_drugs_given')  
+
+hospital_weekly_inpatient <- hospital_weekly_inpatient %>% 
+  left_join(inpatient_weekly_discharges, by=c('first_date_of_week'='first_date_of_week_discharge')) %>% 
+  left_join(bed_nights, by=c('first_date_of_week'))  %>% 
+  left_join(bed_days, by=c('first_date_of_week'))  %>% 
+  left_join(inpatient_medication_given, by=c('first_date_of_week'))  %>% 
+  mutate(drugs_per_bed_days = weekly_drugs_given/weekly_bed_days*1000, 
+         theatre_encounters_per_bed_days =  weekly_theatre/weekly_bed_days*1000) %>% 
+  set_variable_labels(weekly_admissions = "Weekly admissions", weekly_drugs_given = "Weekly medication administrations", weekly_theatre='Weekly surgical encounters',  weekly_bed_nights='Weekly bed nights', weekly_bed_days='Weekly bed days', weekly_discharges='Weekly discharges', drugs_per_bed_days = 'Weekly medication administrations per patient bed days', 
+                    theatre_encounters_per_bed_days = 'Weekly surgical encounters per patient bed days'  ) %>% 
+  relocate(c(weekly_drugs_given, weekly_theatre), .after=last_col())
+
+hospital_weekly_inpatient_table <- tbl_summary(hospital_weekly_inpatient, by=covid) %>% 
+  add_p()
+
+hospital_weekly_day_case <- one_row_per_admission %>% 
+  filter(patient_class=='Day Case') %>% 
+  mutate( first_date_of_week=floor_date(start_datetime_adms, unit='week', week_start = 1)) %>% 
+  add_count(covid, first_date_of_week, name='weekly_admissions')  %>% 
+  group_by(first_date_of_week) %>% 
+  mutate(weekly_theatre=sum(theatre_performed_per_adms), weekly_drugs_given=sum(total_drugs_admin)) %>% 
+  mutate(covid=first_date_of_week>=covid_start, 
+         covid=factor(covid, levels = c(FALSE, TRUE), labels=c('Pre-COVID-19 ', 'COVID-19 '))) %>% 
+  select(covid,  first_date_of_week, contains('weekly'))  %>% 
+  distinct(first_date_of_week, .keep_all=TRUE) %>% 
+  select(-first_date_of_week) %>% 
+  mutate(weekly_discharges=NA, weekly_bed_nights=NA) %>% 
+    mutate(drugs_per_bed_days = weekly_drugs_given/weekly_admissions*1000, 
+                    theatre_encounters_per_bed_days =  weekly_theatre/weekly_admissions*1000) %>% 
+    set_variable_labels(weekly_admissions = "Weekly admissions", weekly_drugs_given = "Weekly medication administrations", weekly_theatre='Weekly surgical encounters', weekly_bed_nights='Weekly bed nights', weekly_discharges='Weekly discharges', 
+                        drugs_per_bed_days = 'Weekly medication administrations per patient bed days', 
+                    theatre_encounters_per_bed_days = 'Weekly surgical encounters per patient bed days' ) %>% 
+  relocate(c(weekly_drugs_given, weekly_theatre), .after=last_col())
+
+
+hospital_weekly_day_case_table <- tbl_summary(hospital_weekly_day_case, by=covid, missing = 'no')  %>% 
+  add_p() 
+
+
+
+saveRDS(list(hospital_weekly_day_case_table, hospital_weekly_inpatient_table), 'weekly_hospital.rds')
+
+```
+
+There were `r admissions_day_cases_n` day cases (`r unique_patients_day_cases_n` individual patients) and `r admissions_inpatient_n` inpatient admissions (`r unique_patients_inpatient_n` individual patients). To compare changes to hospital level activity, median weekly counts of measures of interest before and during COVID-19 were calculated (Table 1). The median number of day cases per week decreased from `r inline_text(hospital_weekly_day_case_table, variable=weekly_admissions, column = 'stat_1',  pattern="{median} (IQR {p25}-{p75})")` before to `r inline_text(hospital_weekly_day_case_table, variable=weekly_admissions, column = 'stat_2',  pattern="{median} (IQR {p25}-{p75})")` during the COVID-19 emergency (Wilcoxon rank-sum test `r inline_text(hospital_weekly_day_case_table, variable=weekly_admissions, column = 'p.value')`). Medication administrations and surgical encounters also decreased significantly during the COVID-19 pandemic, but weekly medication administrations per bed day increased whilst surgical encounters per bed day was almost halved (Table 1).
+
+For inpatients, average weekly admissions and discharges both decreased, whereas there was no statistically significant difference in the median number of bed nights per week. Medication administrations decreased from `r inline_text(hospital_weekly_inpatient_table, variable=weekly_drugs_given, column = 'stat_1', pattern="{median} (IQR {p25}-{p75})")` per week before the pandemic to `r inline_text(hospital_weekly_inpatient_table, variable=weekly_drugs_given, column = 'stat_2', pattern="{median} (IQR {p25}-{p75})")` during, (Wilcoxon rank-sum test `r inline_text(hospital_weekly_inpatient_table, variable=weekly_drugs_given, column = 'p.value')`) but weekly medication administrations per bed day increased.
+
+```{r admissions and prescribing time series, include=TRUE}
+adms_rolling_patient_class <- one_row_per_admission %>% 
+  mutate(start_date=date(start_datetime_adms)) %>% 
+  count(start_date, patient_class) %>% 
+  group_by(patient_class) %>% 
+  arrange(start_date) %>% 
+  mutate(roll_mean = zoo::rollmean(n, 7, fill=NA))
+
+
+disch_rolling_patient_class <- one_row_per_admission %>% 
+  mutate(end_date=date(original_end_date)) %>% 
+  filter(!is.na(end_date)) %>% 
+  count(end_date, patient_class) %>% 
+  group_by(patient_class) %>% 
+  arrange(end_date) %>% 
+  mutate(roll_mean = zoo::rollmean(n, 7, fill=NA))
+
+
+adms_discharge <- left_join(adms_rolling_patient_class, disch_rolling_patient_class, by=c("start_date"='end_date'), suffix=c('_adms', '_disch'))
+adms_discharge <-disch_rolling_patient_class %>% 
+  rename(start_date=end_date) %>% 
+  filter(patient_class=='Inpatient') %>% 
+  mutate(type='Discharges') %>% 
+  bind_rows(adms_rolling_patient_class) %>% 
+  mutate(type=case_when(is.na(type) & patient_class=='Inpatient' ~ 'Admissions', 
+                        is.na(type) & patient_class=='Day Case' ~ 'Day Cases', 
+                        TRUE ~ type), 
+         type=as.factor(type)) %>%
+    mutate(type=fct_relevel(type, 'Day Case', after=Inf)) 
+
+meds_rolling_patient_class <- admissions_meds_given %>% 
+  filter(!is.na(start_datetime_meds_given)) %>% 
+  mutate(start_date=date(start_datetime_adms)) %>% 
+  filter(start_date>'2019-04-23') %>% 
+  count(start_date, patient_class) %>% 
+  group_by(patient_class) %>% 
+  arrange(start_date) %>% 
+  mutate(roll_mean = zoo::rollmean(n, 7, fill=NA))
+
+theatre_rolling_patient_class <- adms_theatre %>% 
+  filter(date>'2019-04-23') %>% 
+  count(date, patient_class, name = 'theatre_encounter') %>% 
+  group_by(patient_class) %>% 
+  arrange(date) %>% 
+  mutate(roll_mean = zoo::rollmean(theatre_encounter, 7, fill=NA))
+
+
+
+
+inpatient_stays <- one_row_per_admission %>% 
+  filter(patient_class=='Inpatient')
+
+occupancy <- interval_census(inpatient_stays, 
+                        identifier = 'adms_id',
+                        admit = 'start_datetime_adms', 
+                        discharge = 'end_datetime_adms', time_unit = '1 day',
+                        uniques = TRUE,
+                        results = "total")
+
+occupancy_plot <- occupancy %>% 
+  arrange(base_date) %>% 
+  arrange(base_date) %>% 
+  mutate(roll_mean = zoo::rollmean(N, 7, fill=NA)) %>% 
+  # filter( base_date>='2019-04-29') %>% 
+  ggplot(., aes(x=base_date )) + geom_col(aes(y=N), fill='purple', alpha=0.2) +
+  geom_line(aes(y=roll_mean)) + 
+  geom_vline(xintercept = as.Date(covid_start)) + scale_x_date(date_breaks = "6 month", date_labels = '%b %Y', 
+                                                               expand = expansion(mult = c(0, 0))) +
+    scale_x_date(date_breaks = '3 month', expand = expansion(mult = c(0, 0)),
+                 date_labels = '%b %Y') +
+  theme_light() +
+  scale_y_continuous(limits=c(0,NA)) +     annotate("text", x = as.Date('2020-05-12'), y = 295, label = "UK lockdown") +
+  theme_light() + labs(y='Number of inpatients', x='', title = '')  + 
+    theme(legend.title = element_blank(), 
+          axis.text=element_text(size=12),
+          legend.position = 'top', 
+          panel.grid.minor.x = element_blank(), 
+          panel.grid.major.x = element_blank(), 
+          panel.grid.minor.y = element_blank(),
+          plot.margin = margin(5.5, 5.5, 5.5, 5)) 
+
+meds_given_plot <- ggplot(meds_rolling_patient_class, aes(x=start_date, y=roll_mean, group=patient_class, colour=patient_class)) +
+  geom_line() +     scale_x_date(date_breaks = '6 month', expand = expansion(mult = c(0, 0)),
+                                 date_labels = '%b %Y') + geom_vline(xintercept = date(covid_start), colour='gray50') + 
+  scale_y_continuous(limits=c(0,NA)) +
+  theme_light() + labs(x='', y='', title = 'Medication administrations,  7 day rolling average')  + theme(legend.title = element_blank())
+
+theatre_plot <- ggplot(theatre_rolling_patient_class, aes(x=date, y=roll_mean, group=patient_class, colour=patient_class)) +
+  geom_line() +     scale_x_date(date_breaks = '3 month', expand = expansion(mult = c(0, 0)),
+                                 date_labels = '%b %Y') + geom_vline(xintercept = date(covid_start), colour='gray50') + 
+  scale_y_continuous(limits=c(0,NA)) +
+  theme_light() + labs(x='', y='', title = 'Surgical encounters, 7 day rolling average')  + theme(legend.title = element_blank())
+
+
+inpatient_adms_discharge_plot <- ggplot(adms_discharge, aes(x=start_date, y=roll_mean, group=type, colour=type)) +
+  geom_line() + scale_colour_viridis(discrete = TRUE) +
+    scale_x_date(date_breaks = '3 month', expand = expansion(mult = c(0, 0)),
+                                 date_labels = '%b %Y') + geom_vline(xintercept = date(covid_start), colour='gray50') + 
+  scale_y_continuous(limits=c(0,NA)) +     annotate("text", x = as.Date('2020-05-12'), y = 95, label = "UK lockdown") +
+    theme_light() + labs(x='', y='Number of patients', title = '')  + 
+    theme(legend.title = element_blank(),
+          axis.text=element_text(size=12),
+          legend.position = 'top', 
+          panel.grid.minor.x = element_blank(), 
+          panel.grid.major.x = element_blank(), 
+          panel.grid.minor.y = element_blank(),
+          plot.margin = margin(5.5, 5.5, 5.5, 5, 'mm'))
+ggsave(plot = inpatient_adms_discharge_plot, here::here('fig1a.jpeg'), dpi=800)
+
+
+
+
+
+```
+
+There was a sharp decrease in the number of day cases in March followed by a slow increase (Figure 1a). Inpatients admissions and discharges show similar patterns, both dropping in March 2020 with gradual recovery. Occupancy levels remained stable during the study period (Figure 1b).
+
+
+```{r patient demograpics, include=TRUE}
+
+
+# patient char
+patient_level <- one_row_per_admission %>% 
+  mutate(covid=factor(covid, levels = c(FALSE, TRUE), labels=c('Pre-COVID-19', 'COVID-19')),
+         male=sex=='M',
+         drug_orders_per_hosp_days=total_drugs_ordered/hosp_days_adms, 
+         drug_admins_per_hosp_days= total_drugs_admin/hosp_days_adms,
+         drug_orders_per_hosp_days_if_at_least_one_drug=ifelse(total_drugs_ordered==0, 
+                                                               NA, drug_orders_per_hosp_days),
+         at_least_one_drug_admin=total_drugs_admin>0) %>% 
+  select(adms_id, covid, age_years, male, hosp_days_adms, admission_type, admission_source, drug_admins_per_hosp_days, drug_orders_per_hosp_days, at_least_one_drug_admin, drug_orders_per_hosp_days_if_at_least_one_drug,
+         contains('per_1000_hosp_days'),theatre_procedure_ever, patient_class)
+
+demo_and_drugs <- patient_level %>% 
+  relocate(contains('per_adms'), .after=drug_orders_per_hosp_days) %>% 
+  mutate(across(-c(covid, patient_class,hosp_days_adms, drug_orders_per_hosp_days, at_least_one_drug_admin,drug_admins_per_hosp_days, age_years, male, theatre_procedure_ever, admission_type, admission_source, contains('per_1000_hosp_days'), drug_orders_per_hosp_days_if_at_least_one_drug ), ~ifelse(at_least_one_drug_admin==FALSE, NA, .x))) %>% 
+    select(-adms_id) %>% 
+      set_variable_labels(age_years='Age at admission, years',
+                          male='Male', 
+                          hosp_days_adms='Length of stay, days',
+                          admission_source = 'Admission source',
+                          admission_type = 'Admission type',
+                          drug_admins_per_hosp_days='Medication administrations per day in hospital',
+                          at_least_one_drug_admin='At least one medication administration', 
+                          theatre_procedure_ever='At least one surgical encounter') 
+
+
+dtc_demo_df_table <- split(demo_and_drugs, f=demo_and_drugs$patient_class) %>% 
+  map(~.x %>% 
+        select(-c(patient_class, drug_orders_per_hosp_days_if_at_least_one_drug, drug_orders_per_hosp_days)) %>% 
+        tbl_summary( by=covid,
+                     missing='no' ) %>% 
+        add_p() )
+
+
+
+saveRDS(dtc_demo_df_table, 'dtc_demo_df_table.rds')
+
+```
+
+Patients admitted as day cases during the COVID-19 pandemic were slightly younger (median `r inline_text(dtc_demo_df_table[['Day Case']], variable=age_years, column = 'stat_1', pattern="{median}")` vs `r inline_text(dtc_demo_df_table[['Day Case']], variable=age_years, column = 'stat_2', pattern="{median}")` years), a greater proportion had at least one drug administered (`r inline_text(dtc_demo_df_table[['Day Case']], variable=at_least_one_drug_admin, column = 'stat_1', pattern="{p}%")` vs `r inline_text(dtc_demo_df_table[['Day Case']], variable=at_least_one_drug_admin, column = 'stat_2', pattern="{p}%")`) and a lower proportion had at least one surgical encounter (`r inline_text(dtc_demo_df_table[['Day Case']], variable=theatre_procedure_ever, column = 'stat_1', pattern="{p}%")` vs `r inline_text(dtc_demo_df_table[['Day Case']], variable=theatre_procedure_ever, column = 'stat_2', pattern="{p}%")`) (Table 2).
+
+There was no statistically significant difference in median age between inpatients admitted before and during the pandemic period. A greater proportion of inpatients were admitted from an NHS ward for general patients, younger physically disabled, or A&E during the pandemic (`r inline_text(dtc_demo_df_table$Inpatient, variable=admission_source, level= 'NHS - Ward for General Patients, Younger Physically Disabled, or A&E', column = 'stat_1', pattern="{p}%")` vs `r inline_text(dtc_demo_df_table$Inpatient, variable=admission_source, level= 'NHS - Ward for General Patients, Younger Physically Disabled, or A&E', column = 'stat_2', pattern="{p}%")`) and a lower proportion were admitted from their usual place of residence (`r inline_text(dtc_demo_df_table$Inpatient, variable=admission_source, level= 'Usual Place of Residence', column = 'stat_1', pattern="{p}%")` vs `r inline_text(dtc_demo_df_table$Inpatient, variable=admission_source, level= 'Usual Place of Residence', column = 'stat_2', pattern="{p}%")`). The median length of stay for inpatients increased by one day from `r inline_text(dtc_demo_df_table$Inpatient, variable=hosp_days_adms, column = 'stat_1', pattern= "{median}")` to `r inline_text(dtc_demo_df_table$Inpatient, variable=hosp_days_adms, column = 'stat_2', pattern= "{median}")` days. The percentage of inpatients that had at least one medication administration had increased significantly from `r inline_text(dtc_demo_df_table$Inpatient, variable=at_least_one_drug_admin, column = 'stat_1', pattern="{p}%")` before the pandemic to `r inline_text(dtc_demo_df_table$Inpatient, variable=at_least_one_drug_admin, column = 'stat_2', pattern="{p}%")` during. Simultaneously there was a large drop in the percentage of patients that had at least one surgical encounter during their stay from `r inline_text(dtc_demo_df_table$Inpatient, variable=theatre_procedure_ever, column = 'stat_1', pattern="{p}%")` to `r inline_text(dtc_demo_df_table$Inpatient, variable=theatre_procedure_ever, column = 'stat_2', pattern="{p}%")`.
+
+```{r table average weekly admissions by treatment function code , include=TRUE}
+bed_days <- meds_adms %>% 
+  distinct(adms_id, start_datetime_adms, end_datetime_adms, date, patient_class, tfc_name) %>% 
+  mutate(end_date=date(end_datetime_adms)) %>% 
+  mutate( first_date_of_week=floor_date(date, unit='week', week_start = 1), 
+          tfc_name=fct_lump_min(tfc_name, 1000, other_level='Other/missing'), 
+         tfc_name=fct_explicit_na(tfc_name, na_level='Other/missing')
+          ) %>%  
+  mutate(covid=first_date_of_week>=covid_start, 
+         covid=factor(covid, levels = c(FALSE, TRUE), labels=c('Pre-COVID-19 ', 'COVID-19 '))) %>% 
+  count(first_date_of_week,patient_class, tfc_name,  covid,  name='weekly_bed_nights') %>% 
+  pivot_wider(id_cols=c(covid, patient_class, first_date_of_week), names_from = tfc_name, 
+              values_from=weekly_bed_nights, 
+              values_fill=0) 
+
+hosp_services_table_avg <- split(bed_days, f=bed_days$patient_class) %>% 
+  map(~.x %>% 
+        select(-patient_class) %>% 
+        tbl_summary( by=covid, 
+                     type=list(everything() ~ "continuous") ) %>% 
+        add_p() )
+
+
+```
+
+Most specialities saw a decrease in the number of weekly day cases, but paediatric medical oncology day cases significantly increased (Table 3).
+
+There was more variation in bed days between specialities for inpatients. Some specialities such as blood and bone marrow transplant, paediatric intensive care and paediatric medical oncology saw large increases in weekly bed days whereas others such as paediatric trauma and orthopaedics, and paediatric respiratory medicine, reported large decreases.
+
+
+
+
+```{r therapeutic class, include=FALSE, eval=TRUE}
+dtc_daily_admin <- readRDS(here::here('data' , 'dtc_daily_meds_given.RDS'))
+
+
+dtc_daily_admin <- dtc_daily_admin %>%
+filter(date> '2019-04-22') %>%
+rename_with(~str_remove_all(.x, 'dtc_|_per_1000_pd'), starts_with('dtc')) %>% 
+    mutate(  covid=factor(covid, levels = c(FALSE, TRUE), labels=c('Pre-COVID-19', 'COVID-19 period')))
+
+
+dtc_df_table <- split(dtc_daily_admin, f=dtc_daily_admin$patient_class) %>%
+  map(~.x %>%
+  select(-patient_class, -date) %>%
+  rename_with(~str_to_sentence(str_replace_all(.x, '_', ' '))) %>%
+  tbl_summary( by=Covid,
+  type=list(everything() ~ "continuous"),
+  digits = list(all_continuous() ~ c(1,1,1)),
+  statistic=list(all_continuous() ~ "{median} ({p25}, {p75})"),
+  missing='no' ) %>%
+  modify_header(
+  update = list(
+  label ~ "")) %>%
+  add_p() )
+
+
+
+```
+
+There has been a large reduction in administrations of anaesthesia drugs per 1000 patient bed days for both day cases and inpatients. There was a large reduction in administrations of infection (antimicrobial) drugs per 1000 patient bed days for inpatients (Table 4).
+
+## Discussion
+
+```{r numbers-for-discussion}
+## day cases
+day_case_after <- inline_text(hospital_weekly_day_case_table, variable=weekly_admissions, column = 'stat_2', pattern = '{median}') %>% as.numeric()
+ 
+day_case_before <- inline_text(hospital_weekly_day_case_table, variable=weekly_admissions, column = 'stat_1', pattern = '{median}') %>% 
+  as.numeric()
+
+day_case_change_p <- (day_case_after-day_case_before)/day_case_before 
+
+
+# inpatient drugs per day
+inpatient_weekly_drugs_before <- inline_text(hospital_weekly_inpatient_table, variable=drugs_per_bed_days, column = 'stat_1', pattern="{median}") %>% 
+  str_remove(',') %>% 
+  as.numeric()
+inpatient_weekly_drugs_after <- inline_text(hospital_weekly_inpatient_table, variable=drugs_per_bed_days, column = 'stat_2', pattern="{median}") %>% 
+    str_remove(',') %>% 
+  as.numeric()
+inpatient_med_weekly_change <- (inpatient_weekly_drugs_after-inpatient_weekly_drugs_before)/inpatient_weekly_drugs_before
+```
+
+
+The COVID-19 pandemic has caused major disruptions to health care delivery in the UK. This study describes hospital level activity, patient characteristics and prescribing patterns for patients admitted to a specialist children's hospital before and during the COVID-19 pandemic. Understanding how care changed in the early stages of the pandemic will be important to prepare for future emergencies.
+
+The findings of this study show that there were significant reductions in hospital activity at a specialist children's hospital during the COVID-19 pandemic compared to the baseline. In particular, day case activity dropped by around `r percent(abs(day_case_change_p))` per week (from `r inline_text(hospital_weekly_day_case_table, variable=weekly_admissions, column = 'stat_1', pattern = '{median}')` before to `r inline_text(hospital_weekly_day_case_table, variable=weekly_admissions, column = 'stat_2',pattern = '{median}')`). Both admissions and discharges for inpatients decreased, leading to a small overall reduction in hospital bed days but no reduction in hospital bed nights.
+
+Overall weekly medication administrations and surgical encounters decreased for both day cases and inpatients but when scaled by bed days, weekly medication administrations per bed day increased by `r percent(inpatient_med_weekly_change)`, which likely reflects changes to the patient population, with only those children with severe conditions undertaking treatments during the pandemic.
+
+At a patient level, more inpatients were given at least one drug during their stay during the pandemic (`r inline_text(dtc_demo_df_table[['Inpatient']], variable=at_least_one_drug_admin, column = 'stat_1', pattern="{p}%")` vs `r inline_text(dtc_demo_df_table[['Inpatient']], variable=at_least_one_drug_admin, column = 'stat_2', pattern="{p}%")`) and a lower percentage had at least one surgical encounter during their stay (`r inline_text(dtc_demo_df_table[['Inpatient']], variable=theatre_procedure_ever, column = 'stat_1', pattern="{p}%")` vs `r inline_text(dtc_demo_df_table[['Inpatient']], variable=theatre_procedure_ever, column = 'stat_2', pattern="{p}%")`).
+
+Other studies have reported decreases and delays in A&E attendances for children and young people ([@Isba2020a], [@Lynn2020], [-@Jalloh2020]) both in the UK and abroad as a consequence of the COVID-19 emergency. Common explanations include potential lower morbidity during the pandemic and an avoidance of hospital visits either to avoid being exposed to COVID-19 or to avoid burdening the NHS. Care utilisation at specialist hospitals like GOSH is likely to be driven by different factors, given the highly specialist nature of the care and the absence of an A&E department.
+
+A number of factors will have contributed to the variation in changes to patient bed days for different specialities, with different implications. For some specialities the decrease will be due to elective care being postponed as a result of the pandemic. However, such patients will continue to require treatment in the near future, an increase in demand that will lead to different challenges. The large increases in intensive care patients during the COVID-19 pandemic period are likely the result of transfers from other hospitals, as is the increase in number of cancer patients. For other specialities such as paediatric trauma and orthopaedics and paediatric respiratory medicine, the reduction in bed days is likely a consequence of a decrease in demand due to behavioural changes during lockdown. One study reported reduction in paediatric admissions for acute asthma at a London teaching hospital, with suggested reasons including distancing from peers leading to reduced transmissions of respiratory viruses [@Chavasse2020]. There are also reports of reduced trauma surgeries as road traffic accidents and sporting injuries were less prevalent during the pandemic [@Sugand2020]. 
+
+Drug administration data provides information regarding how medication treatment changed during the pandemic. Some changes reflect alterations in case mix, such as the large reduction in anesthesia use in association with reduced surgical encounters and the increase in malignancy and immunosuppression drugs as a result of the increase in cancer patients referred to the specialist centre during COVID-19. The increase in antimicrobial drugs is more difficult to interpret since this may represent several factors such as changing referral patterns or increased antimicrobial prophylaxis and use in patients with more complex healthcare requirements such as in oncology. Pharmacist working patterns changed during the pandemic which could have influenced antimicrobial stewardship activities. There are concerns that the COVID-19 pandemic will increase levels of antimicrobial resistance in part due to relaxing of antimicrobial stewardship activities[@Rawson2020]. 
+
+A major strength of this study is the use of a large routinely collected, comprehensive patient-level data set with very recent data included. Hospital medication data is an underused resource in health care research [@Goldacre2020]. The use of medication administration data in this study allows us to go beyond hospital use and quantify changes to medical treatments during the pandemic. Our study population is representative of a specialist children's hospital, and the longer time period covered allows us to understand the effect of COVID-19 not just during the height of the pandemic but also the prolonged effect on health care. 
+
+One limitation is that the pre-COVID-19 period does not cover the identical calendar months, making it impossible to adjust for factors related to seasonality. Similarly, an extended time period would allow more robust statistical timeseries analyses. As a sensitivity analysis, we used historical admission data from 2016 to 2018 and found similar trends for hospital admissions and discharges. Though this was not possible for all metrics in this study due to differences between the old and new data systems, this sensitivity analysis indicates that the pre-pandemic period is representative of baseline activity. It should also be highlighted that the data we present here is from a highly specialist children's hospital and patients are not representative of the general paediatric population or children in primary or secondary care settings. We were unable to say whether the patterns of utilisation were appropriate clinically for the needs of the patients or assess the experience of the children and their carers.
+
+
+The COVID-19 pandemic has caused an unprecedented impact on health care systems in the UK and globally. The findings of the current study confirm a significant decrease in the number of day cases being treated at a specialist children's hospital but  inpatient activity for children with rare and complex disorders was less affected. There is however wide variation between treatment specialities, leading to some patient groups having been virtually unaffected and others severely affected. Whilst overall prescribing activity reduced, the average number of medications per inpatient bed day increased. These data confirm the complex pattern of implications on specialist services and should be useful for planning for the impact of future emergencies and resolution strategies.
+
+# What is already known on this topic? 
+- There are growing concerns that children are negatively affected by changes to society despite not in general being affected by the disease itself
+- There was a reduction in paediatric emergency attendances during the COVID-19 pandemic.
+
+
+
+# What this study adds?
+- Our analysis shows that the COVID-19 pandemic affected care at a specialist children's hospital, with reduced surgical activity the most marked effect.
+- Per-patient medication use rose, including increased use of antimicrobials.
+
+# Competing interest
+
+None declared
+
+# Funding
+
+The Health Foundation supports E.V's PhD.
+
+# Code
+https://github.com/emmavestesson/COVID-prescribing
+\newpage
+
+## Tables and figures
+
+
+#### Table 1: Weekly hospital level activity before and after the start of the COVID-19 emergency
+```{r table1, include=TRUE}
+tbl_merge(list(hospital_weekly_day_case_table, hospital_weekly_inpatient_table), tab_spanner = c('Day cases', 'Inpatient')) %>% 
+  as_flex_table() %>% 
+  width(width = 0.9)
+```
+
+\newpage
+#### Table 2: A comparison of the characteristics of patients admitted before and after the start of the COVID-19 emergency
+
+```{r table2, include = TRUE}
+tbl_merge(dtc_demo_df_table, tab_spanner = names(dtc_demo_df_table)) %>% 
+  as_flex_table() %>% 
+  width(width = 0.9)
+```
+#### Table 3: Change in bed days by treatment speciality
+```{r table3, include=TRUE}
+tbl_merge(hosp_services_table_avg, tab_spanner = names(hosp_services_table_avg)) %>% 
+  as_flex_table() %>% 
+  width(width = 0.9)
+
+```
+
+\newpage
+
+#### Table 4: Medication administrations per 1000 patient days by therapeutic class before and after the start of the COVID-19 emergency
+```{r table4, include =TRUE}
+tbl_merge(dtc_df_table, tab_spanner = names(dtc_df_table)) %>%
+as_flex_table() %>% 
+    width(width = 0.9)
+```
+
+\newpage
+#### Figure 1: (a) Day cases, inpatient admissions and discharges over time. (b) Inpatient occupancy over time
+
+```{r hospital activity, include=TRUE, dpi=800, fig.height=15, include= FALSE}
+inpatient_adms_discharge_plot / occupancy_plot & plot_annotation( tag_levels = 'a', theme = theme(plot.margin = margin(5.5, 5.5, 5.5, 0, 'mm'))
+)  
+
+ggsave( here::here('fig1.jpeg'), dpi=800, height=20, width=18, units = 'cm') 
+```
+
+
+
+# References
