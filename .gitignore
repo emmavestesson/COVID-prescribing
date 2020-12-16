@@ -5,4 +5,4 @@
 
 *.csv
 *.rds
-*data*
+*/data*
